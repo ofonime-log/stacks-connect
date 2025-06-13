@@ -314,17 +314,28 @@
 ;; PUBLIC INTERFACE FUNCTIONS - External API Endpoints
 
 ;; Intelligent Batch Optimization - Dynamic Performance Tuning
-(define-public (optimize-batch-size (user principal))
+;; FIXED: Now only allows users to optimize their own batch settings
+(define-public (optimize-batch-size)
   (let (
-      (batch-data (unwrap-panic (map-get? UserBatches user)))
+      (caller tx-sender)
+      (batch-data (default-to {
+        message-counter: u0,
+        last-batch-timestamp: stacks-block-height,
+        batch-size: MIN_BATCH_SIZE,
+        current-batch-items: u0,
+        total-batches: u0,
+      }
+        (map-get? UserBatches caller)
+      ))
       (current-time stacks-block-height)
       (time-since-last-batch (- current-time (get last-batch-timestamp batch-data)))
       (current-batch-size (get batch-size batch-data))
       (items-in-current-batch (get current-batch-items batch-data))
     )
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
     (if (> time-since-last-batch BATCH_EXPIRY_PERIOD)
       (begin
-        (map-set UserBatches user
+        (map-set UserBatches caller
           (merge batch-data {
             batch-size: (max-uint MIN_BATCH_SIZE (/ current-batch-size u2)),
             current-batch-items: u0,
@@ -334,7 +345,7 @@
         (ok true)
       )
       (begin
-        (map-set UserBatches user
+        (map-set UserBatches caller
           (merge batch-data { batch-size: (min-uint MAX_BATCH_SIZE
             (if (>= items-in-current-batch (/ current-batch-size u2))
               (* current-batch-size u2)
@@ -424,7 +435,15 @@
 (define-public (set-batch-size (new-size uint))
   (let (
       (caller tx-sender)
-      (batch-data (unwrap-panic (map-get? UserBatches caller)))
+      (batch-data (default-to {
+        message-counter: u0,
+        last-batch-timestamp: stacks-block-height,
+        batch-size: MIN_BATCH_SIZE,
+        current-batch-items: u0,
+        total-batches: u0,
+      }
+        (map-get? UserBatches caller)
+      ))
     )
     (asserts! (check-active-user caller) ERR_DEACTIVATED)
     (asserts! (and (>= new-size MIN_BATCH_SIZE) (<= new-size MAX_BATCH_SIZE))
