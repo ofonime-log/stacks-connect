@@ -295,3 +295,127 @@
     blocked: blocked,
   }))
 )
+
+;; Privacy Settings Accessor - Secure Default Configuration
+(define-private (get-privacy-settings (user principal))
+  (default-to {
+    friend-list-visible: true,
+    status-visible: true,
+    metadata-visible: true,
+    last-seen-visible: true,
+    profile-image-visible: true,
+    encryption-enabled: false,
+    last-updated: stacks-block-height,
+  }
+    (map-get? UserPrivacy user)
+  )
+)
+
+;; PUBLIC INTERFACE FUNCTIONS - External API Endpoints
+
+;; Intelligent Batch Optimization - Dynamic Performance Tuning
+(define-public (optimize-batch-size (user principal))
+  (let (
+      (batch-data (unwrap-panic (map-get? UserBatches user)))
+      (current-time stacks-block-height)
+      (time-since-last-batch (- current-time (get last-batch-timestamp batch-data)))
+      (current-batch-size (get batch-size batch-data))
+      (items-in-current-batch (get current-batch-items batch-data))
+    )
+    (if (> time-since-last-batch BATCH_EXPIRY_PERIOD)
+      (begin
+        (map-set UserBatches user
+          (merge batch-data {
+            batch-size: (max-uint MIN_BATCH_SIZE (/ current-batch-size u2)),
+            current-batch-items: u0,
+            last-batch-timestamp: current-time,
+          })
+        )
+        (ok true)
+      )
+      (begin
+        (map-set UserBatches user
+          (merge batch-data { batch-size: (min-uint MAX_BATCH_SIZE
+            (if (>= items-in-current-batch (/ current-batch-size u2))
+              (* current-batch-size u2)
+              current-batch-size
+            )) }
+          ))
+        (ok true)
+      )
+    )
+  )
+)
+
+;; Advanced Privacy Configuration - Granular Control Center
+(define-public (update-advanced-privacy-settings
+    (friend-list-visible bool)
+    (status-visible bool)
+    (metadata-visible bool)
+    (last-seen-visible bool)
+    (profile-image-visible bool)
+    (encryption-enabled bool)
+  )
+  (let ((caller tx-sender))
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (check-rate-limit caller u2) ERR_RATE_LIMITED)
+    (map-set UserPrivacy caller {
+      friend-list-visible: friend-list-visible,
+      status-visible: status-visible,
+      metadata-visible: metadata-visible,
+      last-seen-visible: last-seen-visible,
+      profile-image-visible: profile-image-visible,
+      encryption-enabled: encryption-enabled,
+      last-updated: stacks-block-height,
+    })
+    (update-rate-limit caller u2)
+    (update-user-activity caller)
+    (print {
+      event: "privacy-updated",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
+
+;; Flexible Profile Management - Dynamic User Data Updates
+(define-public (update-user-profile
+    (name (optional (string-ascii 64)))
+    (metadata (optional (string-utf8 256)))
+    (encryption-key (optional (buff 32)))
+    (profile-image (optional (string-utf8 256)))
+  )
+  (let (
+      (caller tx-sender)
+      (user (unwrap-panic (map-get? Users caller)))
+    )
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (check-rate-limit caller u2) ERR_RATE_LIMITED)
+    (map-set Users caller
+      (merge user {
+        name: (default-to (get name user) name),
+        metadata: (if (is-some metadata)
+          metadata
+          (get metadata user)
+        ),
+        encryption-key: (if (is-some encryption-key)
+          encryption-key
+          (get encryption-key user)
+        ),
+        profile-image: (if (is-some profile-image)
+          profile-image
+          (get profile-image user)
+        ),
+      })
+    )
+    (update-rate-limit caller u2)
+    (update-user-activity caller)
+    (print {
+      event: "profile-updated",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
