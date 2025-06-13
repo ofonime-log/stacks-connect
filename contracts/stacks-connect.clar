@@ -187,3 +187,111 @@
     )
   )
 )
+
+;; Rate Limit Counter - Action Tracking & Increment
+(define-private (update-rate-limit
+    (user principal)
+    (action-type uint)
+  )
+  (let ((rate-data (unwrap-panic (map-get? RateLimits user))))
+    (map-set RateLimits user
+      (merge rate-data {
+        daily-actions: (+ (get daily-actions rate-data) u1),
+        friend-requests: (+ (get friend-requests rate-data)
+          (if (is-eq action-type u1)
+            u1
+            u0
+          )),
+        status-updates: (+ (get status-updates rate-data)
+          (if (is-eq action-type u2)
+            u1
+            u0
+          )),
+      })
+    )
+  )
+)
+
+;; Activity Logger - Comprehensive User Action Tracking
+(define-private (update-user-activity (user principal))
+  (let (
+      (current-time stacks-block-height)
+      (activity (default-to {
+        last-seen: current-time,
+        login-count: u0,
+        total-actions: u0,
+        last-action: current-time,
+      }
+        (map-get? UserActivity user)
+      ))
+    )
+    (map-set UserActivity user
+      (merge activity {
+        last-seen: current-time,
+        total-actions: (+ (get total-actions activity) u1),
+        last-action: current-time,
+      })
+    )
+  )
+)
+
+;; Mathematical Utilities - Optimization Helpers
+(define-private (max-uint
+    (a uint)
+    (b uint)
+  )
+  (if (>= a b)
+    a
+    b
+  )
+)
+
+(define-private (min-uint
+    (a uint)
+    (b uint)
+  )
+  (if (<= a b)
+    a
+    b
+  )
+)
+
+;; Social Graph Validators - Relationship Verification
+(define-private (are-friends
+    (user1 principal)
+    (user2 principal)
+  )
+  (match (map-get? Friendships {
+    user1: user1,
+    user2: user2,
+  })
+    friendship (is-eq (get status friendship) FRIENDSHIP_ACTIVE)
+    false
+  )
+)
+
+;; User Status Validators - Security & Access Control
+(define-private (check-active-user (user principal))
+  (match (map-get? Users user)
+    user-data (and
+      (is-eq (get status user-data) STATUS_ACTIVE)
+      (is-none (get deactivation-time user-data))
+    )
+    false
+  )
+)
+
+(define-private (user-exists (user principal))
+  (is-some (map-get? Users user))
+)
+
+;; Safety Validators - Blocking & Protection
+(define-private (is-blocked
+    (blocker principal)
+    (blocked principal)
+  )
+  (is-some (map-get? BlockedUsers {
+    blocker: blocker,
+    blocked: blocked,
+  }))
+)
